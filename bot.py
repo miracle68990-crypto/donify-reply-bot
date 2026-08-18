@@ -9,7 +9,7 @@ from telegram.ext import (
     filters,
 )
 
-from responses import REPLIES, DEFAULT_REPLY, MATCH_MODE
+from responses import REPLIES, DEFAULT_REPLY, MATCH_MODE, DEFAULT_REPLY_KEYWORDS
 
 logging.basicConfig(
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
@@ -40,6 +40,12 @@ def find_reply(text: str):
     return None
 
 
+def mentions_donify(text: str) -> bool:
+    """True if the message contains any of the DEFAULT_REPLY_KEYWORDS."""
+    text_check = text.lower()
+    return any(kw.lower() in text_check for kw in DEFAULT_REPLY_KEYWORDS)
+
+
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     message = update.message
     if not message or not message.text:
@@ -49,7 +55,10 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     if reply:
         await message.reply_text(reply)
-    elif DEFAULT_REPLY:
+    elif DEFAULT_REPLY and mentions_donify(message.text):
+        # No specific trigger matched, but the message mentions Donify
+        # (or a related keyword) -> send the generic fallback instead
+        # of staying silent.
         await message.reply_text(DEFAULT_REPLY)
 
 
