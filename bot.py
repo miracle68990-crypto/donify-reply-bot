@@ -1,6 +1,9 @@
+import asyncio
 import logging
 import os
+import random
 from telegram import Update
+from telegram.constants import ChatAction
 from telegram.ext import (
     ApplicationBuilder,
     ContextTypes,
@@ -18,6 +21,11 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 BOT_TOKEN = os.environ.get("BOT_TOKEN")
+
+# Random delay range (seconds) before the bot replies, so responses don't
+# look instant/bot-like. Adjust these two numbers to taste.
+MIN_DELAY_SECONDS = 3
+MAX_DELAY_SECONDS = 8
 
 
 def find_reply(text: str):
@@ -46,6 +54,20 @@ def mentions_donify(text: str) -> bool:
     return any(kw.lower() in text_check for kw in DEFAULT_REPLY_KEYWORDS)
 
 
+async def reply_with_delay(message, chat_id, context, text: str):
+    """Show a 'typing...' indicator and wait a short random delay before
+    sending the reply, so it looks more natural than an instant bot reply."""
+    delay = random.uniform(MIN_DELAY_SECONDS, MAX_DELAY_SECONDS)
+
+    try:
+        await context.bot.send_chat_action(chat_id=chat_id, action=ChatAction.TYPING)
+    except Exception:
+        pass  # non-critical if this fails
+
+    await asyncio.sleep(delay)
+    await message.reply_text(text)
+
+
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     message = update.message
     if not message or not message.text:
@@ -54,12 +76,12 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     reply = find_reply(message.text)
 
     if reply:
-        await message.reply_text(reply)
+        await reply_with_delay(message, message.chat_id, context, reply)
     elif DEFAULT_REPLY and mentions_donify(message.text):
         # No specific trigger matched, but the message mentions Donify
         # (or a related keyword) -> send the generic fallback instead
         # of staying silent.
-        await message.reply_text(DEFAULT_REPLY)
+        await reply_with_delay(message, message.chat_id, context, DEFAULT_REPLY)
 
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
